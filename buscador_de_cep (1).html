@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Buscador de CEP</title>
+    <!-- Tailwind CSS para estilização moderna e responsiva -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Fonte limpa e moderna */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+</head>
+<body class="bg-slate-100 min-h-screen flex items-center justify-center p-4">
+
+    <!-- Container Principal do Aplicativo -->
+    <main class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 sm:p-8 transform transition-all">
+        
+        <header class="text-center mb-8">
+            <h1 class="text-3xl font-bold text-slate-800 mb-2">Busca CEP</h1>
+            <p class="text-slate-500 text-sm">Digite um CEP válido para encontrar o endereço completo.</p>
+        </header>
+
+        <!-- Formulário / Input -->
+        <div class="space-y-4">
+            <div>
+                <label for="cepInput" class="block text-sm font-medium text-slate-700 mb-1">CEP</label>
+                <input 
+                    type="text" 
+                    id="cepInput" 
+                    placeholder="Ex: 01001000" 
+                    maxlength="9"
+                    class="w-full px-4 py-3 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                >
+            </div>
+            
+            <button 
+                id="btnBuscar" 
+                class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg shadow-md hover:shadow-lg transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            >
+                Buscar Endereço
+            </button>
+        </div>
+
+        <!-- Área de Resultados (Oculta por padrão) -->
+        <div id="resultadoContainer" class="hidden mt-8 border-t border-slate-200 pt-6">
+            <h2 class="text-lg font-semibold text-slate-800 mb-4 flex items-center">
+                <svg class="w-5 h-5 text-green-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                Endereço Encontrado
+            </h2>
+            <div class="bg-slate-50 rounded-lg p-4 space-y-3">
+                <p class="text-sm text-slate-600"><strong>Logradouro:</strong> <span id="logradouro" class="text-slate-900 font-medium"></span></p>
+                <p class="text-sm text-slate-600"><strong>Bairro:</strong> <span id="bairro" class="text-slate-900 font-medium"></span></p>
+                <p class="text-sm text-slate-600"><strong>Cidade:</strong> <span id="localidade" class="text-slate-900 font-medium"></span></p>
+                <p class="text-sm text-slate-600"><strong>UF:</strong> <span id="uf" class="text-slate-900 font-medium"></span></p>
+            </div>
+        </div>
+
+        <!-- Área de Erro (Oculta por padrão) -->
+        <div id="erroContainer" class="hidden mt-6 bg-red-50 border border-red-200 rounded-lg p-4">
+            <div class="flex items-center">
+                <svg class="w-5 h-5 text-red-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                <p id="mensagemErro" class="text-sm text-red-700 font-medium">Não foi possível buscar o CEP.</p>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        // Mapeando os elementos do DOM
+        const inputCep = document.getElementById('cepInput');
+        const btnBuscar = document.getElementById('btnBuscar');
+        const containerResultado = document.getElementById('resultadoContainer');
+        const containerErro = document.getElementById('erroContainer');
+        const msgErro = document.getElementById('mensagemErro');
+
+        // Mapeando os spans para preenchimento dinâmico
+        const spanLogradouro = document.getElementById('logradouro');
+        const spanBairro = document.getElementById('bairro');
+        const spanLocalidade = document.getElementById('localidade');
+        const spanUf = document.getElementById('uf');
+
+        // Função Assíncrona para buscar os dados na API ViaCEP
+        async function buscarCEP(cep) {
+            // Tratamento inicial: remover caracteres não numéricos como hifens
+            const cepLimpo = cep.replace(/\D/g, '');
+
+            // Validação de formato (deve ter 8 dígitos)
+            if (cepLimpo.length !== 8) {
+                mostrarErro('O CEP deve conter 8 números válidos.');
+                return;
+            }
+
+            // Alterar texto do botão para dar feedback de loading
+            btnBuscar.textContent = 'Buscando...';
+            btnBuscar.disabled = true;
+
+            try {
+                // Requisição fetch aguardando a resposta
+                const resposta = await fetch(`https://viacep.com.br/ws/${cepLimpo}/json/`);
+                
+                // Verifica se a requisição HTTP falhou
+                if (!resposta.ok) {
+                    throw new Error('Falha na conexão com a API.');
+                }
+
+                // Converte os dados recebidos para JSON
+                const dados = await resposta.json();
+
+                // A API do ViaCEP retorna { "erro": "true" } se o formato for válido mas o CEP não existir
+                if (dados.erro) {
+                    throw new Error('CEP não encontrado. Verifique os números digitados.');
+                }
+
+                // Atualizando o DOM com os dados retornados
+                spanLogradouro.textContent = dados.logradouro || 'Não informado';
+                spanBairro.textContent = dados.bairro || 'Não informado';
+                spanLocalidade.textContent = dados.localidade;
+                spanUf.textContent = dados.uf;
+
+                // Mostra o resultado e esconde os erros
+                esconderErro();
+                containerResultado.classList.remove('hidden');
+
+            } catch (erro) {
+                // Captura qualquer erro na requisição (rede ou lógica manual acima)
+                mostrarErro(erro.message || 'Ocorreu um erro ao buscar o CEP.');
+                containerResultado.classList.add('hidden');
+            } finally {
+                // Retorna o botão ao estado original independente de sucesso ou erro
+                btnBuscar.textContent = 'Buscar Endereço';
+                btnBuscar.disabled = false;
+            }
+        }
+
+        // Função auxiliar para exibir a mensagem de erro no DOM
+        function mostrarErro(mensagem) {
+            msgErro.textContent = mensagem;
+            containerErro.classList.remove('hidden');
+            containerResultado.classList.add('hidden');
+        }
+
+        // Função auxiliar para esconder a caixa de erro
+        function esconderErro() {
+            containerErro.classList.add('hidden');
+        }
+
+        // Adicionando evento de clique no botão
+        btnBuscar.addEventListener('click', () => {
+            const cep = inputCep.value;
+            if (cep.trim() === '') {
+                mostrarErro('Por favor, digite um CEP antes de buscar.');
+                return;
+            }
+            buscarCEP(cep);
+        });
+
+        // Permitir que o usuário aperte "Enter" no campo de texto para buscar
+        inputCep.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                btnBuscar.click();
+            }
+        });
+    </script>
+</body>
+</html>
